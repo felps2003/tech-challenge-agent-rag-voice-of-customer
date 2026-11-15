@@ -1,3 +1,5 @@
+Link do vídeo no Youtube mostrando o projeto: https://youtu.be/ANC-6YvVWo0
+
 # Voice of Customer Intelligence com RAG (Olist)
 
 Tech Challenge – Fase 4 (Deep Learning and NLP). Gestores fazem perguntas em linguagem natural sobre as avaliações de clientes da Olist e recebem respostas **fundamentadas nas avaliações recuperadas**, com as evidências visíveis. Quando a base não sustenta a resposta, o sistema **recusa** em vez de inventar.
