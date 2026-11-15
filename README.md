@@ -58,9 +58,18 @@ cp .env.example .env        # preencha GEMINI_API_KEY (Windows: copy .env.exampl
 
 ```bash
 python -m src.prepare       # limpa e gera data/processed/reviews_kb.csv
-python -m src.index         # embeddings + ChromaDB (alguns minutos em CPU)
+python -m src.index         # embeddings + ChromaDB (~15 min em CPU para os 35 mil documentos)
 python -m scripts.calibrate # (opcional) ajuda a escolher MIN_SIMILARITY
 ```
+
+Para um teste rápido, `python -m src.index --limit 2000` indexa uma amostra em ~1 minuto.
+
+Dois problemas conhecidos de ambiente (Windows):
+
+- **Pasta sincronizada (OneDrive, Dropbox):** o Chroma trava ao gravar o índice dentro dela. Defina `CHROMA_DIR` no `.env` apontando para uma pasta local fora da sincronização, por exemplo `CHROMA_DIR=C:/voc_rag_chroma`.
+- **`pyarrow` antigo:** a versão 17 derruba o ChromaDB com "access violation". O `requirements.txt` já exige `pyarrow>=21`.
+
+Na primeira abertura do app, espere ~30 s: ele carrega o modelo de embeddings e o índice BM25 antes de aceitar perguntas.
 
 3. Use:
 
@@ -100,6 +109,19 @@ Seguindo a aula de ética: avaliações são texto livre e podem conter dados pe
 - **Seleção:** corte por similaridade mínima, remoção de quase-duplicatas e limite de 12 evidências, para o contexto ser enxuto e variado.
 - **Geração fundamentada:** o prompt proíbe conhecimento externo, exige citação `[R#]` por afirmação e manda falar "nas avaliações recuperadas" (o LLM vê uma amostra, não a base inteira, então não pode afirmar percentuais globais).
 - **Rastreabilidade:** a interface lista todas as evidências, marca quais foram citadas e mostra o contexto exato enviado ao LLM.
+
+## Metadados: como contribuem para a recuperação (desafio adicional)
+
+O embedding captura o **tema** do texto, mas não a nota, a categoria do produto nem se a entrega atrasou de fato. Esses dados ficam como metadados e viram filtros aplicados **dentro** da busca (cláusula `where` do Chroma e máscara equivalente no BM25). Medi o efeito na base completa, só com a busca vetorial e sem LLM (`python -m scripts.metadados`):
+
+| Situação | Sem filtro | Com filtro |
+|---|---|---|
+| Reclamações em geral (12 primeiros) | 83% eram de nota ≤ 2 (2 eram nota 5) | 100% |
+| Categoria `bed_bath_table` (40 primeiros) | 4 de 40 eram da categoria | 12 de 12 |
+| "Problema de entrega" (40 primeiros) | só 13 haviam chegado atrasadas (24 no prazo, 3 sem data) | 12 de 12 atrasadas |
+| Elogios (12 primeiros) | 100% com nota ≥ 4 | 100% (sem ganho) |
+
+Leitura: os filtros permitem **perguntas que a busca semântica sozinha não consegue responder** ("nas avaliações de baixa nota", "na categoria X", "nas entregas que de fato atrasaram"), porque o texto não carrega essa informação. O ganho é grande para categoria e atraso, pequeno para nota baixa e nulo para elogios (o texto já separa bem). Dois cuidados: o filtro garante a propriedade por construção, então o que importa é a pergunta realmente pedi-la; e os filtros automáticos inferidos pelo LLM podem errar (aparecem no painel do pipeline e podem ser desligados ou sobrescritos na barra lateral).
 
 ## Perguntas sem evidência suficiente
 
@@ -147,6 +169,30 @@ O pipeline segue o que foi visto nas aulas de LangChain, em `src/rag.py`:
 - **ChromaDB:** persistente em disco, suporta filtro por metadados nativamente, sem servidor.
 - **Cosseno com vetores normalizados:** a similaridade vira `1 - distância`, fácil de interpretar e usar como limiar.
 - **Recusa antes do LLM:** barato, determinístico e auditável; não depende do modelo "se comportar".
+
+## O app em funcionamento
+
+Capturas reais do Streamlit (`streamlit run app.py`), com a base completa de 35.210 avaliações e o modelo `gemini-3.5-flash-lite`.
+
+**1. Tela inicial:** filtros por metadados na barra lateral, opções do pipeline e perguntas de exemplo.
+
+![Tela inicial do app](docs/img/01-tela-inicial.jpg)
+
+**2. Resposta e trilha do pipeline:** a resposta vem agrupada por temas, com citações `[R#]`. O painel mostra a pergunta original, a consulta reescrita, os filtros aplicados, quantas evidências passaram do limiar e o tempo de cada etapa.
+
+![Resposta e painel do pipeline](docs/img/02-resposta-e-pipeline.jpg)
+
+**3. Evidências rastreáveis:** cada evidência indica se foi citada, a nota, a categoria, a similaridade e quem a achou (vetor, BM25 ou ambos). Ao abrir, aparecem o texto original, o `review_id`, o `order_id`, o mês da compra e o atraso na entrega.
+
+![Evidências abertas](docs/img/03-evidencias.jpg)
+
+**4. Filtro por metadados:** com a categoria `bed_bath_table` marcada, a busca fica restrita a essa categoria (aqui combinada com o filtro de nota ≤ 2 inferido pela pergunta).
+
+![Filtro por categoria](docs/img/04-filtro-categoria.jpg)
+
+**5. Recusa:** uma pergunta fora do escopo ("capital da França") não gera resposta inventada. O sistema avisa e mostra o motivo técnico, sem listar evidências.
+
+![Recusa por pergunta fora do escopo](docs/img/05-recusa-fora-do-escopo.jpg)
 
 ## Exemplos de perguntas e respostas
 
@@ -252,6 +298,7 @@ src/lexical.py        Busca BM25 (parte lexical do híbrido)
 src/llm.py            Fábrica do LLM (Gemini/OpenAI) com fallback
 scripts/calibrate.py  Calibração do limiar de similaridade
 scripts/evaluate.py   Precision@k, recusa, citações, latência, fidelidade
+scripts/metadados.py  Efeito dos filtros de metadados na recuperação
 tests/                Testes unitários
 data/raw/             CSVs da Olist (não versionados)
 ```
