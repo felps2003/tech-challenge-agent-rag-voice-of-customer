@@ -1,0 +1,14 @@
+pandas>=2.1
+pyarrow>=21   # versões antigas (17) derrubam o ChromaDB no Windows (access violation)
+numpy>=1.26
+chromadb>=0.5
+sentence-transformers>=3.0
+langchain>=0.3
+langchain-core>=0.3
+langchain-chroma>=0.1
+langchain-google-genai>=2.0
+langchain-openai>=0.2
+streamlit>=1.38
+rank-bm25>=0.2.2
+python-dotenv>=1.0
+pytest>=8.0

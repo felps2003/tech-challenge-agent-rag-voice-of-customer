@@ -1,0 +1,11 @@
+*.egg-info/
+*.pyc
+.claude/
+.env
+.pytest_cache/
+.venv/
+__pycache__/
+dados_kaggle/
+data/chroma/
+data/processed/
+data/raw/
