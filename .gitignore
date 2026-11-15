@@ -9,3 +9,6 @@ dados_kaggle/
 data/chroma/
 data/processed/
 data/raw/
+
+# material pessoal de apoio ao video (não faz parte do projeto)
+docs/roteiro_video.md
